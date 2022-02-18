@@ -3,7 +3,7 @@
 # Script to reproduce results
 
 for ((i=0;i<10;i+=1))
-do 
+do
 	python main.py \
 	--policy "TD3" \
 	--env "HalfCheetah-v3" \
