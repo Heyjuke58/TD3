@@ -4,12 +4,20 @@ import torch
 import gym
 import argparse
 import os
-from pathlib import Path
+from time import perf_counter
+import csv
 
 import TD3.utils as utils
 from TD3.TD3 import TD3
 from TD3.OurDDPG import DDPG as OurDDPG
 from TD3.DDPG import DDPG
+from src.utils import set_seeds, get_timestamp
+
+
+def write_eval_to_csv(dest_folder, file_name, avg_reward, time, env_steps, grad_steps):
+    with open(f"{dest_folder}/{file_name}.csv", "a") as csv_f:
+        writer = csv.writer(csv_f, delimiter=",")
+        writer.writerow([avg_reward, time, env_steps, grad_steps])
 
 
 # Runs policy for X episodes and returns average reward
@@ -72,26 +80,31 @@ def main(dargs: dict[str, Any]):
     # which is more in-line with our SAC implementation.
     args = argparse.Namespace(**dargs)
 
-    file_name = f"{args.policy}_{args.env}_{args.seed}"
+    # set up file and folders for saving stats:
+    file_name = f"{args.policy}_{args.env}_{get_timestamp()}"
     print("---------------------------------------")
     print(f"Policy: {args.policy}, Env: {args.env}, Seed: {args.seed}")
     print("---------------------------------------")
 
-    # dest_res_path = Path(args.dest_res_path)
+    # create results csv and write header and hyperpars to it
+    with open(f"{args.dest_res_path}/{file_name}.csv", "x") as csv_f:
+        # TODO: write hyperpars in first lines
+        csv_f.write("avg_reward,time,env_steps,grad_steps\n")
+
     if not os.path.exists(args.dest_res_path):
         os.makedirs(args.dest_res_path)
-
-    # dest_model_path = Path(args.dest_model_path)
     if args.save_model and not os.path.exists(args.dest_model_path):
         os.makedirs(args.dest_model_path)
 
+    # set up environment and actor:
     env = gym.make(args.env)
 
     # Set seeds
-    env.seed(args.seed)
-    env.action_space.seed(args.seed)
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    # env.seed(args.seed)
+    # env.action_space.seed(args.seed)
+    # torch.manual_seed(args.seed)
+    # np.random.seed(args.seed)
+    set_seeds(args.seed, env)
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
@@ -124,13 +137,16 @@ def main(dargs: dict[str, Any]):
     replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
 
     # Evaluate untrained policy
-    evaluations = [eval_policy(policy, args.env, args.seed)]
+    avg_reward = eval_policy(policy, args.env, args.seed)
+    write_eval_to_csv(args.dest_res_path, file_name, avg_reward, 0, 0, 0)
 
     state, done = env.reset(), False
     episode_reward = 0
     episode_timesteps = 0
     episode_num = 0
+    grad_steps = 0
 
+    start_time = perf_counter()
     for t in range(int(args.max_timesteps)):
 
         episode_timesteps += 1
@@ -157,6 +173,7 @@ def main(dargs: dict[str, Any]):
         # Train agent after collecting sufficient data
         if t >= args.start_timesteps:
             policy.train(replay_buffer, args.batch_size)
+            grad_steps += 1
 
         if done:
             # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
@@ -171,14 +188,29 @@ def main(dargs: dict[str, Any]):
 
         # Evaluate episode
         if (t + 1) % args.eval_freq == 0:
-            evaluations.append(eval_policy(policy, args.env, args.seed))
-            np.save(f"{args.dest_res_path}/{file_name}", evaluations)
+            elapsed_time = perf_counter() - start_time
+            start_time_eval = perf_counter()
+            avg_reward = eval_policy(policy, args.env, args.seed)
+            write_eval_to_csv(
+                args.dest_res_path, file_name, avg_reward, elapsed_time, t + 1, grad_steps
+            )
+
+            # evaluations.append(eval_policy(policy, args.env, args.seed))
+            # np.save(f"{args.dest_res_path}/{file_name}", evaluations)
             if args.save_model:
                 policy.save(f"{args.dest_model_path}/{file_name}")
 
+            # ignore time for evaluation by adding it to start time
+            start_time += perf_counter() - start_time_eval
+
     # Evaluate final result
-    evaluations.append(eval_policy(policy, args.env, args.seed))
-    np.save(f"{args.dest_res_path}/{file_name}", evaluations)
+    elapsed_time = perf_counter() - start_time
+    avg_reward = eval_policy(policy, args.env, args.seed)
+    write_eval_to_csv(
+        args.dest_res_path, file_name, avg_reward, elapsed_time, int(args.max_timesteps), grad_steps
+    )
+    # evaluations.append(eval_policy(policy, args.env, args.seed))
+    # np.save(f"{args.dest_res_path}/{file_name}", evaluations)
     if args.save_model:
         policy.save(f"{args.dest_model_path}/{file_name}")
 
