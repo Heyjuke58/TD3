@@ -34,7 +34,7 @@ def eval_policy(policy, env_name, seed, eval_episodes=10):
     return avg_reward
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args() -> dict[str, Any]:
     parser = argparse.ArgumentParser()
     parser.add_argument("--policy", default="TD3")  # Policy name (TD3, DDPG or OurDDPG)
     parser.add_argument("--env", default="HalfCheetah-v2")  # OpenAI gym environment name
@@ -64,10 +64,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dest_model_path", type=str, dest="dest_model_path", default="./models")
     parser.add_argument("--dest_res_path", type=str, dest="dest_res_path", default="./results")
     args = parser.parse_args()
-    return args
+    return vars(args)
 
 
-def main(args: argparse.Namespace):
+def main(dargs: dict[str, Any]):
+    # args are converted back to namespace (better for calling the main with kwargs,
+    # which is more in-line with our SAC implementation.
+    args = argparse.Namespace(**dargs)
 
     file_name = f"{args.policy}_{args.env}_{args.seed}"
     print("---------------------------------------")
