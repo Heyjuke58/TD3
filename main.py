@@ -89,6 +89,22 @@ def main(dargs: dict[str, Any]):
     # create results csv and write header and hyperpars to it
     with open(f"{args.dest_res_path}/{file_name}.csv", "x") as csv_f:
         # TODO: write hyperpars in first lines
+        csv_f.write(
+            f"""
+            Hyperparameters\n
+            Env: {args.env}\n
+            Seed: {args.seed}\n
+            Eval frequency: {args.eval_freq}\n
+            Number of initial exploration steps: {args.start_timesteps}\n
+            Max env steps: {args.max_timesteps}\n
+            Batch size: {args.batch_size}\n
+            Discount factor: {args.discount}\n
+            Target network update rate: {args.tau}\n
+            Policy noise: {args.policy_noise}\n
+            Noise clip: {args.noise_clip}\n
+            Frequency of delayed policy updates: {args.policy_freq}\n\n
+        """
+        )
         csv_f.write("avg_reward,time,env_steps,grad_steps\n")
 
     if not os.path.exists(args.dest_res_path):
