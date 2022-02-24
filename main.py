@@ -14,10 +14,12 @@ from TD3.DDPG import DDPG
 from src.utils import set_seeds, get_timestamp
 
 
-def write_eval_to_csv(dest_folder, file_name, avg_reward, time, env_steps, grad_steps):
-    with open(f"{dest_folder}/{file_name}.csv", "a") as csv_f:
+def write_eval_to_csv(
+    res_file: str, avg_reward: float, time: float, env_steps: int, grad_steps: int, seed: int
+):
+    with open(res_file, "a") as csv_f:
         writer = csv.writer(csv_f, delimiter=",")
-        writer.writerow([avg_reward, time, env_steps, grad_steps])
+        writer.writerow([avg_reward, time, env_steps, grad_steps, seed])
 
 
 # Runs policy for X episodes and returns average reward
@@ -81,36 +83,37 @@ def main(dargs: dict[str, Any]):
     args = argparse.Namespace(**dargs)
 
     # set up file and folders for saving stats:
-    file_name = f"{args.policy}_{args.env}_{get_timestamp()}"
+    # file_name = f"{args.policy}_{args.env}_{get_timestamp()}"
     print("---------------------------------------")
     print(f"Policy: {args.policy}, Env: {args.env}, Seed: {args.seed}")
     print("---------------------------------------")
-
-    # create results csv and write header and hyperpars to it
-    with open(f"{args.dest_res_path}/{file_name}.csv", "x") as csv_f:
-        # TODO: write hyperpars in first lines
-        csv_f.write(
-            f"""
-            Hyperparameters\n
-            Env: {args.env}\n
-            Seed: {args.seed}\n
-            Eval frequency: {args.eval_freq}\n
-            Number of initial exploration steps: {args.start_timesteps}\n
-            Max env steps: {args.max_timesteps}\n
-            Batch size: {args.batch_size}\n
-            Discount factor: {args.discount}\n
-            Target network update rate: {args.tau}\n
-            Policy noise: {args.policy_noise}\n
-            Noise clip: {args.noise_clip}\n
-            Frequency of delayed policy updates: {args.policy_freq}\n\n
-        """
-        )
-        csv_f.write("avg_reward,time,env_steps,grad_steps\n")
 
     if not os.path.exists(args.dest_res_path):
         os.makedirs(args.dest_res_path)
     if args.save_model and not os.path.exists(args.dest_model_path):
         os.makedirs(args.dest_model_path)
+
+    res_file = f"{args.dest_res_path}/{args.file_name}.csv"
+    if not os.path.exists(res_file):
+        # create results csv and write header and hyperpars to it
+        with open(res_file, "x") as csv_f:
+            # TODO: write hyperpars in first lines
+            hyperpars_str = (
+                "Hyperparameters\n"
+                f"Env: {args.env}\n"
+                f"Seed: {args.seed}\n"
+                f"Eval frequency: {args.eval_freq}\n"
+                f"Number of initial exploration steps: {args.start_timesteps}\n"
+                f"Max env steps: {args.max_timesteps}\n"
+                f"Batch size: {args.batch_size}\n"
+                f"Discount factor: {args.discount}\n"
+                f"Target network update rate: {args.tau}\n"
+                f"Policy noise: {args.policy_noise}\n"
+                f"Noise clip: {args.noise_clip}\n"
+                f"Frequency of delayed policy updates: {args.policy_freq}\n\n"
+            )
+            csv_f.write(hyperpars_str)
+            csv_f.write("avg_reward,time,env_steps,grad_steps,seed\n")
 
     # set up environment and actor:
     env = gym.make(args.env)
@@ -147,14 +150,14 @@ def main(dargs: dict[str, Any]):
         policy = DDPG(**kwargs)
 
     if args.load_model != "":
-        policy_file = file_name if args.load_model == "default" else args.load_model
+        policy_file = args.file_name if args.load_model == "default" else args.load_model
         policy.load(f"./models/{policy_file}")
 
     replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
 
     # Evaluate untrained policy
     avg_reward = eval_policy(policy, args.env, args.seed)
-    write_eval_to_csv(args.dest_res_path, file_name, avg_reward, 0, 0, 0)
+    write_eval_to_csv(res_file, avg_reward, 0, 0, 0, args.seed)
 
     state, done = env.reset(), False
     episode_reward = 0
@@ -208,13 +211,18 @@ def main(dargs: dict[str, Any]):
             start_time_eval = perf_counter()
             avg_reward = eval_policy(policy, args.env, args.seed)
             write_eval_to_csv(
-                args.dest_res_path, file_name, avg_reward, elapsed_time, t + 1, grad_steps
+                res_file,
+                avg_reward,
+                elapsed_time,
+                t + 1,
+                grad_steps,
+                args.seed,
             )
 
             # evaluations.append(eval_policy(policy, args.env, args.seed))
             # np.save(f"{args.dest_res_path}/{file_name}", evaluations)
             if args.save_model:
-                policy.save(f"{args.dest_model_path}/{file_name}")
+                policy.save(f"{args.dest_model_path}/{args.file_name}")
 
             # ignore time for evaluation by adding it to start time
             start_time += perf_counter() - start_time_eval
@@ -223,12 +231,17 @@ def main(dargs: dict[str, Any]):
     elapsed_time = perf_counter() - start_time
     avg_reward = eval_policy(policy, args.env, args.seed)
     write_eval_to_csv(
-        args.dest_res_path, file_name, avg_reward, elapsed_time, int(args.max_timesteps), grad_steps
+        res_file,
+        avg_reward,
+        elapsed_time,
+        int(args.max_timesteps),
+        grad_steps,
+        args.seed,
     )
     # evaluations.append(eval_policy(policy, args.env, args.seed))
     # np.save(f"{args.dest_res_path}/{file_name}", evaluations)
     if args.save_model:
-        policy.save(f"{args.dest_model_path}/{file_name}")
+        policy.save(f"{args.dest_model_path}/{args.file_name}")
 
 
 if __name__ == "__main__":
