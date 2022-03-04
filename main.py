@@ -228,16 +228,16 @@ def main(dargs: dict[str, Any]):
             start_time += perf_counter() - start_time_eval
 
     # Evaluate final result
-    elapsed_time = perf_counter() - start_time
-    avg_reward = eval_policy(policy, args.env, args.seed)
-    write_eval_to_csv(
-        res_file,
-        avg_reward,
-        elapsed_time,
-        int(args.max_timesteps),
-        grad_steps,
-        args.seed,
-    )
+    # elapsed_time = perf_counter() - start_time
+    # avg_reward = eval_policy(policy, args.env, args.seed)
+    # write_eval_to_csv(
+    #     res_file,
+    #     avg_reward,
+    #     elapsed_time,
+    #     int(args.max_timesteps),
+    #     grad_steps,
+    #     args.seed,
+    # )
     # evaluations.append(eval_policy(policy, args.env, args.seed))
     # np.save(f"{args.dest_res_path}/{file_name}", evaluations)
     if args.save_model:
